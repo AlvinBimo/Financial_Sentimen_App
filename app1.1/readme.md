@@ -1,5 +1,5 @@
 # Linux Problem 
-1. dont forget to change the folder owner to user not root, this problem can lead to permission error when tried to run teh app
+1. dont forget to change the folder owner to user not root, this problem can lead to permission error when tried to run the app
 
 # Major Update
 1. Translate all the text to Bahasa Indonesia on the main app -> affected in app.py
