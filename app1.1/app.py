@@ -823,12 +823,14 @@ if st.button("Kumpulkan dan Analisa Data", disabled=(not query.strip() or not se
         st.warning("Please select a valid model")
         st.stop()
 
-    if start_date and not end_date:
-        st.warning("Please specify an end date")
-        st.stop()
-    elif end_date and not start_date:
-        st.warning("Please specify a start date")
-        st.stop()
+    # For news sources, require both dates or none
+    if selected_news:
+        if start_date and not end_date:
+            st.warning("Please specify an end date")
+            st.stop()
+        elif end_date and not start_date:
+            st.warning("Please specify a start date")
+            st.stop()
 
     try:
         with st.spinner("Mengumpulkan artikel dan melakukan analisis", show_time=True):
@@ -839,14 +841,14 @@ if st.button("Kumpulkan dan Analisa Data", disabled=(not query.strip() or not se
 
             if "INAPROC Daftar Hitam" in additional_sources:
                 st.session_state.inaproc_flag = True
-                inaproc_df = get_single_spider_data(ADDITIONAL_SOURCES["INAPROC Daftar Hitam"], INAPROC_FILE_PATH, query)
+                inaproc_df = get_single_spider_data(ADDITIONAL_SOURCES["INAPROC Daftar Hitam"], INAPROC_FILE_PATH, query, start_date, end_date)   
                 inaproc_df.to_csv(INAPROC_FILE_PATH, index=False)
             else:
                 st.session_state.inaproc_flag = False
 
             if "Putusan MA" in additional_sources:
                 st.session_state.putusan_ma_flag = True
-                putusan_ma_df = get_single_spider_data(ADDITIONAL_SOURCES["Putusan MA"], PUTUSAN_MA_FILE_PATH, query)
+                putusan_ma_df = get_single_spider_data(ADDITIONAL_SOURCES["Putusan MA"], PUTUSAN_MA_FILE_PATH, query, start_date, end_date)
                 putusan_ma_df.to_csv(PUTUSAN_MA_FILE_PATH, index=False)
             else:
                 st.session_state.putusan_ma_flag = False

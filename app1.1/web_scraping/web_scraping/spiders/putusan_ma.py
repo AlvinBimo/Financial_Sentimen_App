@@ -1,4 +1,5 @@
 import scrapy
+import re
 from urllib.parse import quote_plus, urljoin
 from datetime import datetime
 from scrapy.http import HtmlResponse
@@ -43,31 +44,37 @@ class PutusanMASpider(scrapy.Spider):
 
         print("INI HASIL: ", results)
         print("INI JUGA HASIL: ",self.start_date, self.end_date)
+        
         for r in results:
-            title = r.css('strong a::text').get('').strip()
-            link = r.css('strong a::attr(href)').get()
-            small = r.css('div.small')
+            title = r.css("strong a::text").get()
+            if title:
+                title = title.strip()
+            link = r.css("strong a::attr(href)").get()
             tanggal_putus = None
+            small_divs = r.css("div.small")
 
-            for s in small.css('strong'):
-                label = s.xpath('normalize-space(text())').get()
-                next_text = s.xpath('following-sibling::text()[1]').get()
-                if label and 'Putus' in label and next_text:
-                    tanggal_putus = next_text.strip().replace('—', '').strip()
-                    break
-            
-            print(f"DEBUG: title={title}, link={link}, tanggal_putus={tanggal_putus}")
+            if len(small_divs) >= 2:
+                small_text = small_divs[1].get()
+                date_match = re.search(r"Putus\s*:.*?(\d{2}-\d{2}-\d{4})", small_text)
+                if date_match:
+                    tanggal_putus = date_match.group(1)
 
             if tanggal_putus:
                 try:
-                    tanggal_obj = datetime.strptime(tanggal_putus, '%d-%m-%Y').date()
+                    tanggal_obj = datetime.strptime(tanggal_putus, "%d-%m-%Y").date()
                 except ValueError:
                     tanggal_obj = None
 
                 if tanggal_obj:
                     if self.start_date and tanggal_obj < self.start_date:
+                        print(
+                            f"SKIP: {title[:50]}... - {tanggal_obj} < {self.start_date}"
+                        )
                         continue
                     if self.end_date and tanggal_obj > self.end_date:
+                        print(
+                            f"SKIP: {title[:50]}... - {tanggal_obj} > {self.end_date}"
+                        )
                         continue
 
             if title and link and tanggal_putus:
@@ -78,11 +85,8 @@ class PutusanMASpider(scrapy.Spider):
                     'query': self.query
                 }
                 yield hasil
-            
-            with open('hasil_putusan_ma.txt', 'w', encoding='utf-8') as f:
-                f.write(f"{title}\n{link}\n{tanggal_putus}\n\n")
 
-        for page in range(2, 2):
+        for page in range(2, 3):
             next_page = f'https://putusan3.mahkamahagung.go.id/search.html?q={self.encoded_query}&page={page}'
             yield scrapy.Request(next_page, callback=self.parse)
 
