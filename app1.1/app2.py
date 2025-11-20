@@ -1,6 +1,6 @@
 from run_and_analyze import collect_data_and_analyze_sentiment, get_single_spider_data
 from config import (TEMP_DIR, SENTIMENT_FILE_PATH, INAPROC_FILE_PATH, PUTUSAN_MA_FILE_PATH, DATA_DIR, FEEDBACK_FILE_PATH,
-                    NEWS_SOURCES, ADDITIONAL_SOURCES, MODELS, SENTIMENT_COLORS)
+                    NEWS_SOURCES, ADDITIONAL_SOURCES,SENTIMENT_COLORS)
 
 import streamlit as st
 import pandas as pd
@@ -20,7 +20,9 @@ from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFacto
 from Sastrawi.Dictionary.ArrayDictionary import ArrayDictionary
 from Sastrawi.StopWordRemover.StopWordRemover import StopWordRemover
 from pathlib import Path
-from streamlit_extras.stylable_container import stylable_container
+from streamlit_marquee import streamlit_marquee
+import streamlit.components.v1 as components
+
 
 
 TEMP_DIR = Path("temp")
@@ -28,6 +30,10 @@ TEMP_DIR.mkdir(exist_ok=True)
 if not os.access(TEMP_DIR, os.W_OK):
     # helpful message to user/developer
     raise RuntimeError(f"Directory {TEMP_DIR} is not writable. Run: sudo chown -R $(whoami):$(whoami) {TEMP_DIR}")
+
+# Initialize feedback counter if it doesn't exist
+st.session_state.user_feedback_count = st.session_state.get('user_feedback_count', 0)
+MIN_FEEDBACK_REQUIRED = 5
 
 # --- App Configuration ---
 st.set_page_config(
@@ -40,7 +46,7 @@ st.set_page_config(
 TEMP_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
 if not os.path.exists(FEEDBACK_FILE_PATH):
-    pd.DataFrame(columns=['article_title', 'sentence', 'original_label', 'original_score', 'model',
+    pd.DataFrame(columns=['article_title', 'sentence', 'original_label', 'original_score',
                           'feedback', 'corrected_label', 'timestamp']).to_csv(FEEDBACK_FILE_PATH, index=False)
 
 
@@ -110,7 +116,6 @@ def filter_data(
 
     return df
 
-
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_period_count(
         df: pd.DataFrame,
@@ -138,7 +143,6 @@ def get_period_count(
 
     return period_counts[list(SENTIMENT_COLORS.keys())]
 
-
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_sentiment_words(df: pd.DataFrame) -> dict:
     """
@@ -146,7 +150,7 @@ def get_sentiment_words(df: pd.DataFrame) -> dict:
     """
     stemmer = StemmerFactory().create_stemmer()
     stop_words = StopWordRemoverFactory().get_stop_words()
-    stop_words += ["pt", "persero", "group", "tbk"]
+    stop_words += ["pt", "persero", "group", "tbk","rp",'nggak','nya','nih','si','deh','kok','gue','loh','loh','yah','tau','aja']
     dictionary = ArrayDictionary(stop_words)
     stopword_remover = StopWordRemover(dictionary)
 
@@ -194,11 +198,11 @@ def get_sentiment_words(df: pd.DataFrame) -> dict:
 
     return sentiment_texts
 
-
 def save_feedback(feedback_data: Dict) -> None:
     """
     Saves model prediction feedback data from user.
     """
+    st.session_state.user_feedback_count += 1
     try:
         df = pd.read_csv(FEEDBACK_FILE_PATH)
         new_df = pd.DataFrame([feedback_data])
@@ -206,7 +210,6 @@ def save_feedback(feedback_data: Dict) -> None:
         df.to_csv(FEEDBACK_FILE_PATH, index=False)
     except Exception as e:
         st.error(f"Error saving feedback: {e}")
-
 
 # Display/Visualization Functions
 def display_dataframe(
@@ -244,7 +247,6 @@ def display_dataframe(
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             key=f'dl_{filename}_xlsx'
         )
-
 
 def visualize_sentiment_distribution(df: pd.DataFrame) -> None:
     """
@@ -321,7 +323,6 @@ def visualize_sentiment_distribution(df: pd.DataFrame) -> None:
     )
 
     st.plotly_chart(fig_stacked, use_container_width=True)
-
 
 def visualize_sentiment_over_time(df: pd.DataFrame) -> None:
     """
@@ -402,7 +403,6 @@ def visualize_sentiment_over_time(df: pd.DataFrame) -> None:
     )
     st.plotly_chart(fig_time, use_container_width=True)
 
-
 def visualize_wordcloud(df: pd.DataFrame) -> None:
     """
     Create wordclouds for each sentiment category
@@ -421,7 +421,7 @@ def visualize_wordcloud(df: pd.DataFrame) -> None:
         if text.strip():
             wordcloud = WordCloud(
                 background_color='white',
-                colormap='viridis' if sentiment == 'positive' else 'cool' if sentiment == 'neutral' else 'Reds',
+                colormap='Greens' if sentiment == 'positive' else 'cool' if sentiment == 'neutral' else 'Reds',
                 max_words=30,
                 contour_width=3,
                 contour_color='steelblue',
@@ -440,7 +440,7 @@ def visualize_wordcloud(df: pd.DataFrame) -> None:
     plt.tight_layout()
     st.pyplot(fig)
 
-
+# To Do :Perbaiki permasalahan pada bagian display nilai feedback counter yang tidak bertambah saat user memberikan feedback
 def display_articles(df: pd.DataFrame) -> None:
     """
     Displays articles in a DataFrame with:
@@ -448,20 +448,32 @@ def display_articles(df: pd.DataFrame) -> None:
      - Checkbox to highlight most relevant sentence in an article
      - Dropdown to show all relevant sentence and model predictions in each article
      - User rating feature for model predictions
+     - Feedback counter to track user contributions
     """
+    
+    # --- FEEDBACK VISUALIZER ---
+    # Display progress in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.metric("Feedback Progress", f"{st.session_state.user_feedback_count} / {MIN_FEEDBACK_REQUIRED}")
+    st.sidebar.progress(st.session_state.user_feedback_count / MIN_FEEDBACK_REQUIRED)
+    
+    # Show warning if needed
+    if st.session_state.user_feedback_count < MIN_FEEDBACK_REQUIRED:
+        st.warning(
+            f"Please provide feedback on at least **{MIN_FEEDBACK_REQUIRED} sentences** to help improve the model. "
+            f"You have currently given **{st.session_state.user_feedback_count}** feedback(s).",
+            icon="⚠️"
+        )
+    # Robust column handling with default values
+    df_display = df.copy()
+
     st.subheader("Hasil Analisis Sentimen berserta Artikel")
 
-    if df.empty or 'title' not in df.columns:
+    if df_display.empty:
         st.info("Artikel kosong untuk ditampilkan.")
         return
 
-    df_display = df.copy()
-
-    if 'predicted_label' not in df_display.columns:
-        df_display['predicted_label'] = 'unknown'
-    else:
-        df_display['predicted_label'] = df_display['predicted_label'].fillna('unknown')
-
+    # Sorting feature
     sort_option = st.selectbox(
         "Sort by:",
         options=["Date (Newest First)", "Date (Oldest First)", "Sentiment"],
@@ -469,14 +481,11 @@ def display_articles(df: pd.DataFrame) -> None:
     )
 
     if sort_option == "Date (Newest First)":
-        if 'date' in df_display.columns:
-            df_display = df_display.sort_values('date', ascending=False)
+        df_display = df_display.sort_values('date', ascending=False)
     elif sort_option == "Date (Oldest First)":
-        if 'date' in df_display.columns:
-            df_display = df_display.sort_values('date', ascending=True)
+        df_display = df_display.sort_values('date', ascending=True)
     elif sort_option == "Sentiment":
-        if 'predicted_label' in df_display.columns:
-            df_display = df_display.sort_values('predicted_label')
+        df_display = df_display.sort_values('predicted_label')
 
     article_options_col1, article_options_col2 = st.columns(2)
 
@@ -513,8 +522,9 @@ def display_articles(df: pd.DataFrame) -> None:
 
         full_body = row.get('body', 'No content')
         sentences_pred = row.get('sentences_pred', [])
+        
         # literal eval when we need to use it instead of when we're loading
-        if isinstance(sentences_pred, str):
+        if isinstance(sentences_pred, str) and sentences_pred:
             try:
                 # Note: HF datasets saves python dictionary in list objects in csv differently than pandas dataframe
                 # Using pandas won't need the workaround below as the commas are included
@@ -576,8 +586,6 @@ def display_articles(df: pd.DataFrame) -> None:
                 unsafe_allow_html=True
             )
 
-            # TODO: edge case when no relevant sentence in article body. overall sentiment will be determined by
-            #       title, but user cannot see and rate the prediction in the UI.
             if 'sentences_pred' in row and row['sentences_pred']:
                 with st.expander("Show relevant sentences"):
                     if isinstance(sentences_pred, list) and sentences_pred:
@@ -615,19 +623,21 @@ def display_articles(df: pd.DataFrame) -> None:
                                     st.session_state[f'open_label_correction_{feedback_key}'] = False
 
                                 if good_review:
+                                    
                                     st.session_state[f'open_label_correction_{feedback_key}'] = False
+                                    # Increment feedback counter
                                     feedback_data = {
                                         'article_title': row.get('title', ''),
                                         'sentence': sent.get('sentence', ''),
                                         'original_label': sent.get('label', ''),
                                         'original_score': sent.get('score', 0),
-                                        'model': st.session_state.model_path,
                                         'feedback': 'good',
                                         'corrected_label': '',
                                         'timestamp': pd.Timestamp.now()
                                     }
                                     save_feedback(feedback_data)
                                     st.success("Thanks for your feedback!")
+                                                
 
                                 if bad_review:
                                     st.session_state[f'open_label_correction_{feedback_key}'] = True
@@ -643,27 +653,28 @@ def display_articles(df: pd.DataFrame) -> None:
                                         submitted = st.form_submit_button("Submit Correction")
 
                                         if submitted:
+                                            # Increment feedback counter
                                             feedback_data = {
                                                 'article_title': row.get('title', ''),
                                                 'sentence': sent.get('sentence', ''),
                                                 'original_label': sent.get('label', ''),
                                                 'original_score': sent.get('score', 0),
-                                                'model': st.session_state.model_path,
                                                 'feedback': 'bad',
                                                 'corrected_label': corrected_label,
                                                 'timestamp': pd.Timestamp.now()
                                             }
                                             save_feedback(feedback_data)
                                             st.success("Thanks for your feedback!")
+                                            st.session_state[f'open_label_correction_{feedback_key}'] = False
                     else:
                         st.info("No relevant sentences available")
+
 
     if total_pages > 1:
         st.write(
             f"Showing articles {start_idx + 1}-{min(end_idx, len(df_display))} of {len(df_display)} (Page {page}/{total_pages})")
     else:
         st.write(f"Showing {len(df_display)} articles")
-
 
 def display_inaproc() -> None:
     """
@@ -691,15 +702,7 @@ def display_putusan_ma() -> None:
     Checks if Putusan MA data was gathered and displays it if exists.
     """
     # measure load time for putusan_ma data
-    start = perf_counter()
     putusan_ma_df = load_data(PUTUSAN_MA_FILE_PATH, False)
-    end = perf_counter()
-    putusan_ma_sec = max(0.0, end - start)
-    try:
-        st.session_state['putusan_ma_seconds'] = putusan_ma_sec
-    except Exception:
-        pass
-
     if not putusan_ma_df.empty:
         st.error(f"{query.title()} Ditemukan di Putusan Mahkamah Agung")
         display_dataframe(putusan_ma_df, "putusan_ma")
@@ -714,12 +717,13 @@ def display_putusan_ma() -> None:
 #     key="language"
 # )
 
-st.title("📊 Aplikasi Analisis Reputasi Calon Terjamin")
+st.title("Jamkrindo Sentiment Analysis (J-SON)")
 
 st.write("""
 Masukkan kata kunci pencarian Anda dan pilih sumber untuk mengumpulkan data dan melakukan analisis sentimen.\n
 Untuk melihat data yang telah dikumpulkan sebelumnya, tekan tombol "Load Previous Results".\n""")
 
+# --- User Input Section ---
 query = st.text_input(
     "Kata Kunci:",
     placeholder='Masukkan kata kunci (Contoh: "Askrindo", "Waskita Karya")',
@@ -739,7 +743,7 @@ with source_col2:
         "Jumlah Artikel Maksimal untuk tiap sumber",
         placeholder="100",
         value="100",
-        help="Data yang diambil tidak selalu tepat sejumlah ini (mungkin sedikit lebih banyak)."
+        help="Data yang terambil dibatasi maksimal sekitar artikel per sumber untuk menghindari waktu tunggu yang lama."
     )
 
 if max_items:
@@ -756,19 +760,17 @@ selected_news = [NEWS_SOURCES[source] for source in selected_sources]
 col1, col2 = st.columns(2)
 with col1:
     start_date = st.date_input(
-        "Periode Awal (Opsional):",
-        value=None,
+        "Periode Awal:",
         key="start_date",
         min_value=date(2020, 1, 1),
         max_value=date.today(),
-        help=("Pemilihan periode awal dan akhir bersifat opsional. Jika tidak diisi, "
-              "maka artikel yang akan diambil adalah artikel dari seluruh periode. "
-              "Catatan: tanggal awal dibatasi mulai 1 Januari 2020.")
+        value = date(2020, 1, 1),
+        help=("Catatan: tanggal awal dibatasi mulai 1 Januari 2020.")
     )
 with col2:
     end_date = st.date_input(
         "Periode Akhir (opsional):",
-        value=None,
+        value=date.today(),
         key="end_date",
         min_value=date(2020, 1, 1),
         max_value=date.today(),
@@ -781,14 +783,6 @@ if (start_date or end_date) and (start_date and end_date and start_date > end_da
     st.error("Error: Start date must be before end date")
     st.stop()
 
-# Model selection
-model = st.selectbox(
-    "Model:",
-    options=list(MODELS.keys()),
-    help="Choose which model to use for sentiment analysis",
-    key="model"
-)
-
 # Additional sources
 additional_sources = st.multiselect(
     "Sumber Informasi Tambahan:",
@@ -798,44 +792,35 @@ additional_sources = st.multiselect(
 )
 
 # --- Main Sentiment Analysis Functionality ---
-if "model_path" not in st.session_state:
-    st.session_state.model_path = ''
-
 if "inaproc_flag" not in st.session_state:
     st.session_state.inaproc_flag = False
-
 if "putusan_ma_flag" not in st.session_state:
     st.session_state.putusan_ma = False
 
+disable_button = (st.session_state.button_disabled or 
+                  not query.strip()
+                  or not selected_news)
+st.write("DEBUG compute:", {"disable_button": disable_button})
+                  
+st.write("DEBUG start:", {
+    "user_feedback_count": st.session_state.get("user_feedback_count", None),
+    "button_disabled": st.session_state.get("button_disabled", None),
+    "user_click": st.session_state.get("user_click", None),
+    "query": bool(query and query.strip()),
+    "selected_news_len": len(selected_news),
+})
 
-st.markdown("""
-<style>
-div.stButton > button {
-    background-color: #00FF00 !important;
-    color: black !important;
-    border-radius: 6px !important;
-    border: none !important;
-    font-weight: 600 !important;
-    padding: 10px 18px !important;
-}
-div.stButton > button:disabled {
-    background-color: #b6ffb6 !important;
-    color: #666666 !important;
-}
-</style>
-""", unsafe_allow_html=True)
+start_button = st.button("Kumpulkan dan Analisa Data", disabled= disable_button)
 
-clicked = st.button(
-    "Kumpulkan dan Analisa Data",
-    disabled=(not query.strip() or not selected_news)
-)
+if start_button:
+    st.session_state.user_click += 1
+    if (st.session_state .user_click > 1) and ((st.session_state.user_feedback_count) < MIN_FEEDBACK_REQUIRED):
+        st.session_state.button_disabled = True
+        st.warning(f"Please provide feedback on at least **{MIN_FEEDBACK_REQUIRED} sentences** to help improve the model. "
+                   f"You have currently given **{st.session_state.user_feedback_count}** feedback(s).")
+        st.rerun()
 
-if clicked:
     st.session_state.display_data = False
-
-
-# if st.button("Kumpulkan dan Analisa Data", disabled=(not query.strip() or not selected_news)):
-#     st.session_state.display_data = False
 
     if not query.strip():
         st.warning("Please enter a valid search query")
@@ -845,17 +830,73 @@ if clicked:
         st.warning("Please select at least one news source")
         st.stop()
 
-    model_path = MODELS.get(model, None)
+    try:
+        with st.spinner("Mengumpulkan artikel dan melakukan analisis", show_time=True):
+            df = collect_data_and_analyze_sentiment(SENTIMENT_FILE_PATH, selected_news, max_items, query, start_date,
+                                                    end_date)
 
-    if not model_path:
-        st.warning("Please select a valid model")
+            df.to_csv(SENTIMENT_FILE_PATH, index=False)
+
+            if "INAPROC Daftar Hitam" in additional_sources:
+                st.session_state.inaproc_flag = True
+                inaproc_df = get_single_spider_data(ADDITIONAL_SOURCES["INAPROC Daftar Hitam"], INAPROC_FILE_PATH, query)
+                inaproc_df.to_csv(INAPROC_FILE_PATH, index=False)
+            else:
+                st.session_state.inaproc_flag = False
+
+            if "Putusan MA" in additional_sources:
+                st.session_state.putusan_ma_flag = True
+                putusan_ma_df = get_single_spider_data(ADDITIONAL_SOURCES["Putusan MA"], PUTUSAN_MA_FILE_PATH, query)
+                putusan_ma_df.to_csv(PUTUSAN_MA_FILE_PATH, index=False)
+            else:
+                st.session_state.putusan_ma_flag = False
+
+            # st.session_state.model_path = model_path
+
+        st.success("Analisis selesai dan data telah disimpan.")
+
+        load_data.clear()
+        filter_data.clear()
+
+        # Reset feedback counter after successful scraping
+        st.session_state.user_feedback_count = 0
+        st.session_state.display_data = True
+        st.rerun()
+    except Exception as e:
+        st.error(f"An error occurred during scraping or analysis: {e}")
+        st.exception(e)
+
+
+if st.button("Kumpulkan dan Analisa Data", disabled=(not query.strip() or not selected_news)):
+    st.session_state.display_data = False
+    if st.session_state.user_feedback_count < 5 and not st.session_state.get('modal_dismissed', False):
+        remaining = 5 - st.session_state.user_feedback_count
+        components.html(
+            f"""
+            <div id="feedback-modal" style="position: fixed; ...">
+                <div style="background: white; padding: 30px; ...">
+                    <h2>⚠️ Feedback Required</h2>
+                    <p>Give {remaining} more feedback(s)</p>
+                    <button onclick="document.getElementById('feedback-modal').style.display='none'">
+                        I Understand
+                    </button>
+                </div>
+            </div>
+            """,
+            height=0
+        )
+    # Reset user feedback counter for a fresh search
+    try:
+        st.session_state['user_feedback_count'] = 0
+    except Exception:
+        pass
+
+    if not query.strip():
+        st.warning("Please enter a valid search query")
         st.stop()
 
-    if start_date and not end_date:
-        st.warning("Please specify an end date")
-        st.stop()
-    elif end_date and not start_date:
-        st.warning("Please specify a start date")
+    if not selected_news:
+        st.warning("Please select at least one news source")
         st.stop()
 
     try:
@@ -898,6 +939,11 @@ if st.button("Load Previous Results", disabled=not file_exists_and_not_empty):
         st.info("Loading previously scraped data.")
         st.cache_data.clear()
         st.session_state.display_data = True
+        # Reset feedback counter when loading previous results
+        try:
+            st.session_state['user_feedback_count'] = 0
+        except Exception:
+            pass
         if "INAPROC Daftar Hitam" in additional_sources:
             st.session_state.inaproc_flag = True
         else:
@@ -915,43 +961,8 @@ if "display_data" not in st.session_state:
 
 if st.session_state.display_data:
     df = load_data(SENTIMENT_FILE_PATH)
-    # If timings were recorded during the last run, display them as metrics
-    timings = st.session_state.get('timings', None)
-    if timings:
-        try:
-            scrape_sec = timings.get('scrape_seconds', 0.0)
-            infer_sec = timings.get('inference_seconds', 0.0)
-            total_sec = timings.get('total_seconds', scrape_sec + infer_sec)
-            Inaproc_sec = st.session_state.get('inaproc_seconds', None)
-            putusan_ma_sec = st.session_state.get('putusan_ma_seconds', None)
-
-            tcol1, tcol2, tcol3= st.columns(3)
-            tcol1.metric(label="Lama Waktu Pencarian", value=f"{scrape_sec:.2f}s")
-            tcol2.metric(label="Lama Waktu Analisa", value=f"{infer_sec:.2f}s" if infer_sec==0.0 else "N/A")
-            tcol3.metric(label="Total Waktu Proses", value=f"{total_sec:.2f}s")
-
-            _, tcols4, tcols5, _ = st.columns([0.3, 1, 1, 0.1])
-            tcols4.metric(label="Waktu Cek INAPROC", value=f"{Inaproc_sec:.2f}s" if Inaproc_sec==0.0 else "N/A")
-            tcols5.metric(label="Waktu Cek Putusan", value=f"{putusan_ma_sec:.2f}s" if putusan_ma_sec==0.0 else "N/A")
-        except Exception:   
-            pass
-            # show additional timings for INAPROC and Putusan MA if available
-            
-        #     if inaproc_sec is not None or putusan_ma_sec is not None:
-        #         cols = st.columns(2)
-        #         if inaproc_sec is not None:
-        #             cols[0].metric(label="Waktu Cek INAPROC", value=f"{inaproc_sec:.2f}s")
-        #         else:
-        #             cols[0].write("")
-        #         if putusan_ma_sec is not None:
-        #             cols[1].metric(label="Waktu Cek Putusan MA", value=f"{putusan_ma_sec:.2f}s")
-        #         else:
-        #             cols[1].write("")
-        # except Exception:
-        #     # If anything goes wrong while reading/displaying timings, ignore silently
-
     if not df.empty:
-        st.sidebar.subheader("Global Filters")
+        st.sidebar.subheader("Filter Data Hasil Analisis")
         filter_sources = None
         filter_sentiments = None
         filter_start_date = None
@@ -969,7 +980,7 @@ if st.session_state.display_data:
         if 'predicted_label' in df.columns:
             all_sentiments = df['predicted_label'].unique()
             filter_sentiments = st.sidebar.multiselect(
-                "Filter by Sentiment:",
+                "Filter Berdasarkan Hasil Sentimen:",
                 options=all_sentiments,
                 default=all_sentiments,
                 key="global_sentiment_filter"
@@ -980,7 +991,7 @@ if st.session_state.display_data:
             max_date = df['date'].max().date()
 
             filter_start_date, filter_end_date = st.sidebar.date_input(
-                "Filter by Date Range:",
+                "Filter Rentang Waktu:",
                 value=(min_date, max_date),
                 min_value=min_date,
                 max_value=max_date,
@@ -995,8 +1006,10 @@ if st.session_state.display_data:
 
     if st.session_state.putusan_ma_flag:
         st.subheader("Hasil Pencarian Putusan Mahkamah Agung")
+        st.write("Hasil pencarian Putusan Mahkamah Agung dapat dicek melalui tautan berikut")
         display_putusan_ma()
 
+    display_dataframe(df)
     # Display pie chart and bar chart
     visualize_sentiment_distribution(df)
     # Display time series chart
@@ -1005,4 +1018,22 @@ if st.session_state.display_data:
     visualize_wordcloud(df)
     # Display articles with sentiment
     display_articles(df)
+
+streamlit_marquee(**{
+    # the marquee container background color
+    'background': "#d5d5d5",
+    # the marquee text size
+    'fontSize': '14px',
+    # the marquee text color
+    "color": "#000000",
+    # the marquee text content
+    'content': 'Mohon dapat mengisi feedback pada bagian artikel untuk membantu peningkatan kualitas model analisis sentimen. Terima kasih!',
+    # the marquee container width
+    'width': '1500px',
+    # the marquee container line height
+    'lineHeight': "14px",
+    # the marquee duration
+    'animationDuration': '25s',
+})
+
 st.markdown("---")

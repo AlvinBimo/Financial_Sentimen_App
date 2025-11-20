@@ -36,6 +36,10 @@ st.set_page_config(
     layout="centered"
 )
 
+# Initialize feedback counter if it doesn't exist
+st.session_state.user_feedback_count = st.session_state.get('user_feedback_count', 0)
+MIN_FEEDBACK_REQUIRED = 5
+
 # --- File Path Configurations ---
 TEMP_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
@@ -199,6 +203,7 @@ def save_feedback(feedback_data: Dict) -> None:
     """
     Saves model prediction feedback data from user.
     """
+    st.session_state.user_feedback_count += 1
     try:
         df = pd.read_csv(FEEDBACK_FILE_PATH)
         new_df = pd.DataFrame([feedback_data])
@@ -269,7 +274,7 @@ def visualize_sentiment_distribution(df: pd.DataFrame) -> None:
     fig_pie.update_traces(
         hovertemplate="<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}"
     )
-    st.plotly_chart(fig_pie, use_container_width=True)
+    st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
 
     st.subheader("Sentiment Distribution by News Source")
 
@@ -449,6 +454,21 @@ def display_articles(df: pd.DataFrame) -> None:
      - Dropdown to show all relevant sentence and model predictions in each article
      - User rating feature for model predictions
     """
+
+    # --- FEEDBACK VISUALIZER ---
+    # Display progress in sidebar
+    # st.sidebar.markdown("---")
+    # st.sidebar.metric("Feedback Progress", f"{st.session_state.user_feedback_count} / {MIN_FEEDBACK_REQUIRED}")
+    # st.sidebar.progress(st.session_state.user_feedback_count / MIN_FEEDBACK_REQUIRED)
+    st.sidebar.markdown("---")
+    # Show warning if needed
+    if st.session_state.user_feedback_count < MIN_FEEDBACK_REQUIRED:
+        st.warning(
+            f"Please provide feedback on at least **{MIN_FEEDBACK_REQUIRED} sentences** to help improve the model. "
+            f"You have currently given **{st.session_state.user_feedback_count}** feedback(s).",
+            icon="⚠️"
+        )
+
     st.subheader("Hasil Analisis Sentimen berserta Artikel")
 
     if df.empty or 'title' not in df.columns:
@@ -629,6 +649,10 @@ def display_articles(df: pd.DataFrame) -> None:
                                     save_feedback(feedback_data)
                                     st.success("Thanks for your feedback!")
 
+                                    # ✅ Tampilkan metric terbaru
+                                    st.sidebar.metric("Feedback Progress", f"{st.session_state.user_feedback_count} / {MIN_FEEDBACK_REQUIRED}")
+                                    st.sidebar.progress(st.session_state.user_feedback_count / MIN_FEEDBACK_REQUIRED)
+
                                 if bad_review:
                                     st.session_state[f'open_label_correction_{feedback_key}'] = True
 
@@ -636,8 +660,7 @@ def display_articles(df: pd.DataFrame) -> None:
                                     with st.form(key=f"correction_form_{feedback_key}"):
                                         corrected_label = st.selectbox(
                                             "What should the correct sentiment be?",
-                                            options=[l for l in ["positive", "negative", "neutral"] if
-                                                     l != sent.get('label', '')],
+                                            options=[l for l in ["positive", "negative", "neutral"] if l != sent.get('label', '')],
                                             key=f"corrected_label_{feedback_key}"
                                         )
                                         submitted = st.form_submit_button("Submit Correction")
@@ -655,6 +678,10 @@ def display_articles(df: pd.DataFrame) -> None:
                                             }
                                             save_feedback(feedback_data)
                                             st.success("Thanks for your feedback!")
+                                            st.session_state[f'open_label_correction_{feedback_key}'] = False
+
+                                            st.sidebar.metric("Feedback Progress", f"{st.session_state.user_feedback_count} / {MIN_FEEDBACK_REQUIRED}")
+                                            st.sidebar.progress(st.session_state.user_feedback_count / MIN_FEEDBACK_REQUIRED)
                     else:
                         st.info("No relevant sentences available")
 
@@ -726,7 +753,27 @@ query = st.text_input(
     key="search_query"
 ).lower()
 
-# Sources
+def colorize_multiselect_options(colors: list[str]) -> None:
+    rules = ""
+    n_colors = len(colors)
+
+    for i, color in enumerate(colors):
+        rules += f"""
+        .stMultiSelect div[data-baseweb="select"] span[data-baseweb="tag"]:nth-child({n_colors}n+{i}) {{
+            background-color: {color} !important;
+            color: white !important;
+        }}
+        .stMultiSelect div[data-baseweb="select"] span[data-baseweb="tag"]:nth-child({n_colors}n+{i}) svg {{
+            fill: white !important;
+        }}
+        """
+
+    st.markdown(f"<style>{rules}</style>", unsafe_allow_html=True)
+
+colors = ["#0056a9"] 
+colorize_multiselect_options(colors)
+
+# --- YOUR MULTISELECT ---
 source_col1, source_col2 = st.columns([0.75, 0.3])
 with source_col1:
     selected_sources = st.multiselect(
@@ -807,32 +854,32 @@ if "inaproc_flag" not in st.session_state:
 if "putusan_ma_flag" not in st.session_state:
     st.session_state.putusan_ma = False
 
+with stylable_container(
+    "green_action_button",
+    css_styles="""
+        button {
+            background-color: #a1d99b !important; 
+            color: black !important;
+            border-radius: 6px !important;
+            border: none !important;
+        }
 
-st.markdown("""
-<style>
-div.stButton > button {
-    background-color: #00FF00 !important;
-    color: black !important;
-    border-radius: 6px !important;
-    border: none !important;
-    font-weight: 600 !important;
-    padding: 10px 18px !important;
-}
-div.stButton > button:disabled {
-    background-color: #b6ffb6 !important;
-    color: #666666 !important;
-}
-</style>
-""", unsafe_allow_html=True)
+        button:disabled {
+            background-color: #edf8e9 !important; /* versi disabled lebih muda */
+            color: #666666 !important;
+            cursor: not-allowed !important;
+        }
+    """
+):
+    clicked = st.button(
+        "Kumpulkan dan Analisa Data",
+        disabled=(not query.strip() or not selected_news)
+    )
 
-clicked = st.button(
-    "Kumpulkan dan Analisa Data",
-    disabled=(not query.strip() or not selected_news)
-)
+st.markdown("<br>", unsafe_allow_html=True)
 
 if clicked:
     st.session_state.display_data = False
-
 
 # if st.button("Kumpulkan dan Analisa Data", disabled=(not query.strip() or not selected_news)):
 #     st.session_state.display_data = False

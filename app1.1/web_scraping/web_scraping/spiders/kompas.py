@@ -109,8 +109,13 @@ class KompasSpider(scrapy.Spider):
 
         if is_match or not self.exact_match:
             date = response.css('div.read__time::text').get()
+            print("DEBUG DATE: ", date) # Debug print to check date format
             if date:
-                date = date.split('-')[1].strip()
+                parts = date.split('-')
+                if len(parts) > 1:
+                    date = parts[1].strip()
+                else:
+                    date = date.strip()
                 try:
                     date = datetime.strptime(date, "%d/%m/%Y, %H:%M WIB")
                 except ValueError:
