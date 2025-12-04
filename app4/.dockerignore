@@ -1,0 +1,49 @@
+# Python junk
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+.rocm_env/
+.rocm/
+.venv/
+
+# Cache and logs
+*.log
+.cache/
+.tmp/
+temp/
+tmp/
+
+# Environment files
+*.env
+.env*
+
+# Git junk
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+
+todolist.txt
+pipeline.json
+app_2_test.py
+readme.md

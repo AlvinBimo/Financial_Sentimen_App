@@ -1,0 +1,91 @@
+import scrapy
+import re
+from urllib.parse import quote_plus, urljoin
+from datetime import datetime
+from scrapy.http import HtmlResponse
+
+class PutusanMASpider(scrapy.Spider):
+    name = "putusan_ma"
+    allowed_domains = ["putusan3.mahkamahagung.go.id"]
+
+    custom_settings = {
+        'FEEDS': {
+            'putusan_ma_data.csv': {
+                'format': 'csv',
+                'encoding': 'utf8',
+                'store_empty': False,
+                'fields': None,
+                'overwrite': True,
+            },
+        },
+        'FEED_EXPORT_ENCODING': 'utf-8',
+    }
+
+    def __init__(self, *args, **kwargs):
+        super(PutusanMASpider, self).__init__(*args, **kwargs)
+        self.query = kwargs.get('query')
+        self.encoded_query = quote_plus(self.query)
+
+        self.start_date = kwargs.get('start_date')
+        self.end_date = kwargs.get('end_date')
+
+        if self.start_date:
+            self.start_date = datetime.strptime(self.start_date, '%Y-%m-%d').date()
+        if self.end_date:
+            self.end_date = datetime.strptime(self.end_date, '%Y-%m-%d').date()
+
+        if self.query:
+            self.start_urls = [f'https://putusan3.mahkamahagung.go.id/search.html?q={self.encoded_query}&page=1']
+        else:
+            self.start_urls = []
+
+    def parse(self, response):
+        results = response.css('div.entry-c')
+
+        print("INI HASIL: ", results)
+        print("INI JUGA HASIL: ",self.start_date, self.end_date)
+        
+        for r in results:
+            title = r.css("strong a::text").get()
+            if title:
+                title = title.strip()
+            link = r.css("strong a::attr(href)").get()
+            tanggal_putus = None
+            small_divs = r.css("div.small")
+
+            if len(small_divs) >= 2:
+                small_text = small_divs[1].get()
+                date_match = re.search(r"Putus\s*:.*?(\d{2}-\d{2}-\d{4})", small_text)
+                if date_match:
+                    tanggal_putus = date_match.group(1)
+
+            if tanggal_putus:
+                try:
+                    tanggal_obj = datetime.strptime(tanggal_putus, "%d-%m-%Y").date()
+                except ValueError:
+                    tanggal_obj = None
+
+                if tanggal_obj:
+                    if self.start_date and tanggal_obj < self.start_date:
+                        print(
+                            f"SKIP: {title[:50]}... - {tanggal_obj} < {self.start_date}"
+                        )
+                        continue
+                    if self.end_date and tanggal_obj > self.end_date:
+                        print(
+                            f"SKIP: {title[:50]}... - {tanggal_obj} > {self.end_date}"
+                        )
+                        continue
+
+            if title and link and tanggal_putus:
+                hasil = {
+                    'title': title,
+                    'link': link,
+                    'tanggal_putus': tanggal_putus,
+                    'kata_kunci': self.query
+                }
+                yield hasil
+
+        for page in range(2, 3):
+            next_page = f'https://putusan3.mahkamahagung.go.id/search.html?q={self.encoded_query}&page={page}'
+            yield scrapy.Request(next_page, callback=self.parse)

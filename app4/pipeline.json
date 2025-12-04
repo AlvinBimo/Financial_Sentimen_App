@@ -1,0 +1,19 @@
+{
+    "appName": "webservice-sentiment-analysis",
+    "coverityType" : "python",
+    "coverityViewNameMedium" : "Medium",
+    "coverityViewNameHigh" : "High",
+    "highQualityGate": "110",
+    "mediumQualityGate": "110",
+    "blackduckGate": "none",
+    "excludeFolderSast": "venv",
+    "UAT": {
+    "appServers": [{
+        "serverIp" : "10.220.70.19"
+        , "serverPort" : "22"
+        , "serverCredId" : "uat-cred-19-nathan"
+        , "containerPort" : "8501"
+        , "servicePort" : "8501"
+        } ]
+    }
+}

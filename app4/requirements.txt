@@ -1,0 +1,16 @@
+aiohttp==3.12.15
+datasets==3.3.2
+dateparser==1.2.2
+plotly==6.3.1
+PySastrawi==1.2.0
+scrapy-playwright==0.0.44
+streamlit==1.50.0
+torch==2.6.0
+transformers==4.49.0
+narwhals==2.7.0
+wordcloud==1.9.4
+xlsxwriter==3.2.5
+twisted==25.5.0
+streamlit-marquee==0.0.7
+streamlit-extras
+playwright==1.44.0

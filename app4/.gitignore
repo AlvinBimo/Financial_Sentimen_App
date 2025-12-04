@@ -1,0 +1,11 @@
+*.Zone.Identifier
+.__pycache__/
+*.pyc
+*.pyo
+*.pyd
+ 
+temp/
+feedback_data.csv
+scraped_data.csv
+
+model/
